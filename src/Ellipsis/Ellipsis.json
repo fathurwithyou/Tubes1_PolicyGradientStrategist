@@ -1,0 +1,15 @@
+{
+  "name": "Ellipsis",
+  "version": "1.0",
+  "authors": [
+    "Fathurwithyou"
+  ],
+  "description": "This bot moves around in a Ellipsis pattern.",
+  "homepage": "",
+  "countryCodes": [
+    "us",
+    "dk"
+  ],
+  "platform": ".Net 9.0",
+  "programmingLang": "C# 10.0"
+}
