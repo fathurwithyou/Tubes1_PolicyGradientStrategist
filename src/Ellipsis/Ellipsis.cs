@@ -5,6 +5,16 @@ using Robocode.TankRoyale.BotApi.Events;
 public class Ellipsis : Bot
 {
     int turnCounter = 0;
+    
+    // Variables for locking on the nearest target.
+    private bool locked = false;
+    private int lockedTargetId = -1;
+    private double lockedTargetX = 0;
+    private double lockedTargetY = 0;
+    private double lockedTargetDistance = double.MaxValue;
+    
+    // Threshold in degrees for determining if enemy is heading toward us.
+    const double HeadOnThreshold = 10.0;
 
     public static void Main(string[] args)
     {
@@ -17,69 +27,84 @@ public class Ellipsis : Bot
     {
         while (IsRunning)
         {
+            // Always keep gun and radar at maximum turn rates.
             GunTurnRate = MaxGunTurnRate;
             RadarTurnRate = MaxRadarTurnRate;
-            if (turnCounter % 64 == 0)
+            
+            // If no target is locked, use default orbiting movement.
+            if (!locked)
             {
-                TurnRate = 0;
-                TargetSpeed = 4;
+                if (turnCounter % 64 == 0)
+                {
+                    TurnRate = 5;
+                    TargetSpeed = MaxSpeed;
+                }
+                else if (turnCounter % 64 == 32)
+                {
+                    TargetSpeed = -MaxSpeed;
+                }
+                turnCounter++;
             }
-            else if (turnCounter % 64 == 32)
-            {
-                TargetSpeed = -6;
-            }
-
-            turnCounter++;
+            
             Go();
         }
     }
 
     public override void OnScannedBot(ScannedBotEvent e)
     {
-        // 1. Compute direct bearing to the enemy
-        double bearing = BearingTo(e.X, e.Y);
+        double scannedDistance = DistanceTo(e.X, e.Y);
 
-        // 2. Offset by 90 deg to move tangentially (orbit around them)
+        // Update lock: if the scanned bot is already locked or is closer than current lock, update.
+        if (locked && e.ScannedBotId == lockedTargetId)
+        {
+            lockedTargetX = e.X;
+            lockedTargetY = e.Y;
+            lockedTargetDistance = scannedDistance;
+        }
+        else if (!locked || scannedDistance < lockedTargetDistance)
+        {
+            locked = true;
+            lockedTargetId = e.ScannedBotId;
+            lockedTargetX = e.X;
+            lockedTargetY = e.Y;
+            lockedTargetDistance = scannedDistance;
+        }
+        
+        // Determine if the enemy is heading toward us.
+        // Calculate the bearing from the enemy to us.
+        double enemyToMe = Math.Atan2(X - e.X, Y - e.Y) * (180.0 / Math.PI);
+        // Normalize the difference between enemy's direction and the bearing from enemy to us.
+        double angleDiff = NormalizeRelativeAngle(e.Direction - enemyToMe);
+        
+        // If the enemy is heading nearly directly toward us, switch to ramming mode.
+        if (Math.Abs(angleDiff) < HeadOnThreshold)
+        {
+            // Ramming mode: turn directly to the enemy and drive full speed.
+            Console.WriteLine("Head-on collision detected. Switching to ramming mode.");
+            double bearingToEnemy = BearingTo(e.X, e.Y);
+            TurnRate = Clamp(bearingToEnemy, -MaxTurnRate, MaxTurnRate);
+            TargetSpeed = MaxSpeed;
+            SetFire(3);  // fire with full power
+            return;
+        }
+        
+        // Normal combat mode (orbiting behavior) using the locked target.
+        double bearing = BearingTo(lockedTargetX, lockedTargetY);
         double tangentBearing = bearing + 90.0;
         tangentBearing = NormalizeRelativeAngle(tangentBearing);
-        tangentBearing = Clamp(tangentBearing, -MaxTurnRate, MaxTurnRate);
-
-        // Set turn rate to orbit around the enemy
-        TurnRate = tangentBearing;
-
+        TurnRate = Clamp(tangentBearing, -MaxTurnRate, MaxTurnRate);
+        
         if (Math.Abs(TargetSpeed) < 4)
             TargetSpeed = 5;
-
-        // 3. Keep the GUN locked on the enemy
-        double gunBearing = GunBearingTo(e.X, e.Y);
-        gunBearing = NormalizeRelativeAngle(gunBearing);
-        gunBearing = Clamp(gunBearing, -MaxGunTurnRate, MaxGunTurnRate);
-        GunTurnRate = gunBearing;
-
-        // 4. Keep the RADAR locked on the enemy
-        double radarBearing = RadarBearingTo(e.X, e.Y);
-        radarBearing = NormalizeRelativeAngle(radarBearing);
-        radarBearing = Clamp(radarBearing, -MaxRadarTurnRate, MaxRadarTurnRate);
-        RadarTurnRate = radarBearing;
-
-        // 5. Fire if close enough and gun is cooled down
-        double distance = DistanceTo(e.X, e.Y);
-        double firePower;
-        if (distance < 50)
-        {
-            firePower = 3;
-        }
-        else if (distance < 100)
-        {
-            firePower = 2;
-        }
-        else
-        {
-            firePower = 1;
-        }
-        if (GunHeat == 0)
-            Fire(firePower);
-
+        
+        double gunBearing = NormalizeRelativeAngle(GunBearingTo(lockedTargetX, lockedTargetY));
+        GunTurnRate = Clamp(gunBearing, -MaxGunTurnRate, MaxGunTurnRate);
+        
+        double radarBearing = NormalizeRelativeAngle(RadarBearingTo(lockedTargetX, lockedTargetY));
+        RadarTurnRate = Clamp(radarBearing, -MaxRadarTurnRate, MaxRadarTurnRate);
+        
+        double firePower = (lockedTargetDistance < 150) ? 3 : 1;
+        SetFire(firePower);
     }
 
     public override void OnHitByBullet(HitByBulletEvent e)
@@ -92,15 +117,12 @@ public class Ellipsis : Bot
         TargetSpeed = -TargetSpeed;
     }
 
-    // Called when we collide with another bot
     public override void OnHitBot(HitBotEvent e)
     {
-        // If we are the one ramming, attempt an escape
-        if (e.IsRammed)
-        {
-            // TurnRate = MaxTurnRate;
-            // TargetSpeed = -10;
-        }
+        double escapeBearing = NormalizeRelativeAngle(BearingTo(e.X, e.Y) + 180.0);
+        TurnRate = Clamp(escapeBearing, -MaxTurnRate, MaxTurnRate);
+        TargetSpeed = -Math.Abs(TargetSpeed);
+        Console.WriteLine("Collision detected. Executing escape maneuver.");
     }
 
     private double Clamp(double value, double min, double max)
