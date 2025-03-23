@@ -1,0 +1,16 @@
+{
+  "name": "Hebi",
+  "version": "1.0",
+  "authors": [
+    "Kirisame-ame"
+  ],
+  "description": "Hebi no you ni hai, zensen!",
+  "homepage": "",
+  "countryCodes": [
+    "id",
+    "jp"
+  ],
+  "platform": ".Net 8.0",
+  "programmingLang": "C# 10.0"
+}
+  
