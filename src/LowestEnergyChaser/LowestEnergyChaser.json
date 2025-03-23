@@ -1,0 +1,10 @@
+{
+  "name": "LowestEnergyChaser",
+  "version": "1.0",
+  "authors": ["DaDecky", "M. Dicky Isra"],
+  "description": "Lowest Energy Chaser",
+  "homepage": "",
+  "countryCodes": ["id"],
+  "platform": ".Net 8.0",
+  "programmingLang": "C# 10.0"
+}
