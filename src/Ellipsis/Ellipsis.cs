@@ -5,14 +5,14 @@ using Robocode.TankRoyale.BotApi.Events;
 public class Ellipsis : Bot
 {
     int turnCounter = 0;
-    
+
     // Variables for locking on the nearest target.
     private bool locked = false;
     private int lockedTargetId = -1;
     private double lockedTargetX = 0;
     private double lockedTargetY = 0;
     private double lockedTargetDistance = double.MaxValue;
-    
+
     // Threshold in degrees for determining if enemy is heading toward us.
     const double HeadOnThreshold = 10.0;
 
@@ -30,7 +30,7 @@ public class Ellipsis : Bot
             // Always keep gun and radar at maximum turn rates.
             GunTurnRate = MaxGunTurnRate;
             RadarTurnRate = MaxRadarTurnRate;
-            
+
             // If no target is locked, use default orbiting movement.
             if (!locked)
             {
@@ -45,7 +45,7 @@ public class Ellipsis : Bot
                 }
                 turnCounter++;
             }
-            
+
             Go();
         }
     }
@@ -69,40 +69,35 @@ public class Ellipsis : Bot
             lockedTargetY = e.Y;
             lockedTargetDistance = scannedDistance;
         }
-        
-        // Determine if the enemy is heading toward us.
-        // Calculate the bearing from the enemy to us.
         double enemyToMe = Math.Atan2(X - e.X, Y - e.Y) * (180.0 / Math.PI);
-        // Normalize the difference between enemy's direction and the bearing from enemy to us.
         double angleDiff = NormalizeRelativeAngle(e.Direction - enemyToMe);
-        
-        // If the enemy is heading nearly directly toward us, switch to ramming mode.
+
+        // If the enemy is heading nearly directly toward us, switch to dodge mode.
         if (Math.Abs(angleDiff) < HeadOnThreshold)
         {
-            // Ramming mode: turn directly to the enemy and drive full speed.
-            Console.WriteLine("Head-on collision detected. Switching to ramming mode.");
+            Console.WriteLine("Head-on threat detected. Initiating dodge maneuver.");
             double bearingToEnemy = BearingTo(e.X, e.Y);
-            TurnRate = Clamp(bearingToEnemy, -MaxTurnRate, MaxTurnRate);
+            double dodgeBearing = NormalizeRelativeAngle(bearingToEnemy + 90);
+            TurnRate = Clamp(dodgeBearing, -MaxTurnRate, MaxTurnRate);
             TargetSpeed = MaxSpeed;
-            SetFire(3);  // fire with full power
+            SetFire(3);  
             return;
         }
-        
-        // Normal combat mode (orbiting behavior) using the locked target.
+
         double bearing = BearingTo(lockedTargetX, lockedTargetY);
         double tangentBearing = bearing + 90.0;
         tangentBearing = NormalizeRelativeAngle(tangentBearing);
         TurnRate = Clamp(tangentBearing, -MaxTurnRate, MaxTurnRate);
-        
+
         if (Math.Abs(TargetSpeed) < 4)
             TargetSpeed = 5;
-        
+
         double gunBearing = NormalizeRelativeAngle(GunBearingTo(lockedTargetX, lockedTargetY));
         GunTurnRate = Clamp(gunBearing, -MaxGunTurnRate, MaxGunTurnRate);
-        
+
         double radarBearing = NormalizeRelativeAngle(RadarBearingTo(lockedTargetX, lockedTargetY));
         RadarTurnRate = Clamp(radarBearing, -MaxRadarTurnRate, MaxRadarTurnRate);
-        
+
         double firePower = (lockedTargetDistance < 150) ? 3 : 1;
         SetFire(firePower);
     }
@@ -114,6 +109,7 @@ public class Ellipsis : Bot
 
     public override void OnHitWall(HitWallEvent e)
     {
+        TurnRate = MaxTurnRate;
         TargetSpeed = -TargetSpeed;
     }
 
