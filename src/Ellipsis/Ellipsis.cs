@@ -5,14 +5,16 @@ using Robocode.TankRoyale.BotApi.Events;
 public class Ellipsis : Bot
 {
     int turnCounter = 0;
-    
+
     // Variables for locking on the nearest target.
     private bool locked = false;
     private int lockedTargetId = -1;
     private double lockedTargetX = 0;
     private double lockedTargetY = 0;
+    private double lockedTargetSpeed = 0;
+    private double lockedTargetDirection = 0;
     private double lockedTargetDistance = double.MaxValue;
-    
+
     // Threshold in degrees for determining if enemy is heading toward us.
     const double HeadOnThreshold = 10.0;
 
@@ -27,10 +29,8 @@ public class Ellipsis : Bot
     {
         while (IsRunning)
         {
-            // Always keep gun and radar at maximum turn rates.
-            GunTurnRate = MaxGunTurnRate;
             RadarTurnRate = MaxRadarTurnRate;
-            
+
             // If no target is locked, use default orbiting movement.
             if (!locked)
             {
@@ -45,9 +45,17 @@ public class Ellipsis : Bot
                 }
                 turnCounter++;
             }
-            
+
             Go();
         }
+    }
+
+    private double[] predictPosition()
+    {
+        double[] position = new double[2];
+        position[0] = lockedTargetX + lockedTargetSpeed * Math.Sin(lockedTargetDirection);
+        position[1] = lockedTargetY + lockedTargetSpeed * Math.Cos(lockedTargetDirection);
+        return position;
     }
 
     public override void OnScannedBot(ScannedBotEvent e)
@@ -60,6 +68,8 @@ public class Ellipsis : Bot
             lockedTargetX = e.X;
             lockedTargetY = e.Y;
             lockedTargetDistance = scannedDistance;
+            lockedTargetSpeed = e.Speed;
+            lockedTargetDirection = e.Direction;
         }
         else if (!locked || scannedDistance < lockedTargetDistance)
         {
@@ -68,22 +78,26 @@ public class Ellipsis : Bot
             lockedTargetX = e.X;
             lockedTargetY = e.Y;
             lockedTargetDistance = scannedDistance;
+            lockedTargetSpeed = e.Speed;
+            lockedTargetDirection = e.Direction;
         }
-         
+
+        double[] pos = predictPosition();
+
         double bearing = BearingTo(lockedTargetX, lockedTargetY);
         double tangentBearing = bearing + 90.0;
         tangentBearing = NormalizeRelativeAngle(tangentBearing);
         TurnRate = Clamp(tangentBearing, -MaxTurnRate, MaxTurnRate);
-        
+
         if (Math.Abs(TargetSpeed) < 4)
             TargetSpeed = 15;
-        
-        double gunBearing = NormalizeRelativeAngle(GunBearingTo(lockedTargetX, lockedTargetY));
+
+        double gunBearing = NormalizeRelativeAngle(GunBearingTo(pos[0], pos[1]));
         GunTurnRate = Clamp(gunBearing, -MaxGunTurnRate, MaxGunTurnRate);
-        
+
         double radarBearing = NormalizeRelativeAngle(RadarBearingTo(lockedTargetX, lockedTargetY));
         RadarTurnRate = Clamp(radarBearing, -MaxRadarTurnRate, MaxRadarTurnRate);
-        
+
         double firePower = (lockedTargetDistance < 150) ? 3 : 1;
         SetFire(firePower);
     }
@@ -100,8 +114,6 @@ public class Ellipsis : Bot
 
     public override void OnHitBot(HitBotEvent e)
     {
-        double escapeBearing = NormalizeRelativeAngle(BearingTo(e.X, e.Y) + 180.0);
-        TurnRate = Clamp(escapeBearing, -MaxTurnRate, MaxTurnRate);
         TargetSpeed = -Math.Abs(TargetSpeed);
         Console.WriteLine("Collision detected. Executing escape maneuver.");
     }
