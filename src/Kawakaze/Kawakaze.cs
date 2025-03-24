@@ -18,8 +18,6 @@ public class Kawakaze : Bot
     public enemyBot target;
     public double[] nextSpot = new double[2];
     public double[] lastSpot = new double[2];
-    const double lockedOnThreshold = 50.0;
-    public bool isLockedOn = false;
     static void Main(string[] args)
     {
         new Kawakaze().Start();
@@ -47,12 +45,11 @@ public class Kawakaze : Bot
         Array.Copy(new double[2]{X, Y}, lastSpot, 2);
         target = new enemyBot();
         while (IsRunning){
-            if (DistanceTo(target.position[0], target.position[1])<lockedOnThreshold){
-                isLockedOn = true;
-            }
-            if (!isLockedOn && target.isAlive && TurnNumber>10){
+            Console.WriteLine(target.isAlive+"sss "+TurnNumber);
+            if (target.isAlive && TurnNumber>10){
                 Operations();
             }
+            Console.WriteLine(nextSpot[0]+" ns "+nextSpot[1]);
             Go();
         }
     }
@@ -83,7 +80,7 @@ public class Kawakaze : Bot
                 }
             }
             lastSpot[0] = X;
-            lastSpot[1] = Y;
+            
         }
         else{
             
@@ -144,37 +141,6 @@ public class Kawakaze : Bot
         }
         return risk;
     }
-    public void RamEvasion(){
-        double[] pos = predictPosition();
-
-        double bearing = BearingTo(target.position[0], target.position[1]);
-        double tangentBearing = bearing + 90.0;
-        tangentBearing = NormalizeRelativeAngle(tangentBearing);
-        TurnRate = Clamp(tangentBearing, -MaxTurnRate, MaxTurnRate);
-
-        if (Math.Abs(TargetSpeed) < 4)
-            TargetSpeed = 15;
-
-        double gunBearing = NormalizeRelativeAngle(GunBearingTo(pos[0], pos[1]));
-        GunTurnRate = Clamp(gunBearing, -MaxGunTurnRate, MaxGunTurnRate);
-
-        double radarBearing = NormalizeRelativeAngle(RadarBearingTo(target.position[0], target.position[1]));
-        RadarTurnRate = Clamp(radarBearing, -MaxRadarTurnRate, MaxRadarTurnRate);
-
-        double firePower = (DistanceTo(target.position[0],target.position[1]) < 150) ? 3 : 1;
-        SetFire(firePower);
-    }
-    private double[] predictPosition()
-    {
-        double[] position = new double[2];
-        position[0] = target.position[0] + target.speed * Math.Sin(target.direction);
-        position[1] = target.position[1] + target.speed * Math.Cos(target.direction);
-        return position;
-    }
-    private double Clamp(double value, double min, double max)
-    {
-        return Math.Max(min, Math.Min(value, max));
-    }
     public override void OnScannedBot(ScannedBotEvent e)
     {
         enemyBot enemy = (enemyBot)enemies[e.ScannedBotId];
@@ -188,10 +154,6 @@ public class Kawakaze : Bot
         enemy.isAlive = true;
         enemy.position[0] = e.X;
         enemy.position[1] = e.Y;
-        if (DistanceTo(e.X, e.Y)<lockedOnThreshold){
-            isLockedOn = true;
-            RamEvasion();
-        }
         // lock the closest enemy
         if(!target.isAlive || DistanceTo(e.X, e.Y)<DistanceTo(target.position[0], target.position[1])){
             target = enemy;
@@ -200,15 +162,6 @@ public class Kawakaze : Bot
             // infinity radar lock
             SetTurnRadarLeft(RadarTurnRemaining);
         }
-    }
-    public override void OnHitWall(HitWallEvent e){
-        // reverse
-        SetTurnRight(NormalizeRelativeAngle(BearingTo(ArenaWidth/2, ArenaHeight/2)+180));
-        SetForward(999);
-    }
-    public override void OnHitBot(HitBotEvent botHitBotEvent)
-    {
-        RamEvasion();
     }
     public override void OnBotDeath(BotDeathEvent e){
         ((enemyBot)enemies[e.VictimId]).isAlive = false;
