@@ -15,9 +15,6 @@ public class Ellipsis : Bot
     private double lockedTargetDirection = 0;
     private double lockedTargetDistance = double.MaxValue;
 
-    // Threshold in degrees for determining if enemy is heading toward us.
-    const double HeadOnThreshold = 10.0;
-
     public static void Main(string[] args)
     {
         new Ellipsis().Start();
